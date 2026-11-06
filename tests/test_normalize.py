@@ -1,5 +1,7 @@
 """Tests de bout en bout (nécessitent ffmpeg). Lancer : python -m unittest"""
 
+from __future__ import annotations
+
 import shutil
 import subprocess
 import tempfile
@@ -7,7 +9,7 @@ import unittest
 from pathlib import Path
 
 from normalize_video.cli import main
-from normalize_video.core import Settings, find_videos, measure, normalize
+from normalize_video.core import Settings, find_videos, measure, normalize, plan_outputs
 
 HAS_FFMPEG = shutil.which("ffmpeg") and shutil.which("ffprobe")
 
@@ -72,6 +74,16 @@ class NormalizeTests(unittest.TestCase):
         code = main([str(self.quiet), "-o", str(out), "--preset", "youtube"])
         self.assertEqual(code, 0)
         self.assertAlmostEqual(measure(out / "quiet.mp4").integrated, -14.0, delta=1.0)
+
+
+class PlanOutputsTests(unittest.TestCase):
+    def test_same_name_in_different_folders_does_not_collide(self):
+        files = [Path("a/clip.mp4"), Path("b/clip.mp4"), Path("c/clip.mp4")]
+        outs = plan_outputs(files, Path("sortie"))
+        self.assertEqual([o.name for o in outs], ["clip.mp4", "clip (2).mp4", "clip (3).mp4"])
+
+    def test_default_suffix_next_to_original(self):
+        self.assertEqual(plan_outputs([Path("a/clip.mov")]), [Path("a/clip_normalise.mov")])
 
 
 if __name__ == "__main__":

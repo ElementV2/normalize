@@ -8,7 +8,9 @@ version = "1.0.0"
 description = "Normalise le volume sonore de plusieurs vidéos au même niveau (EBU R128, ffmpeg)."
 readme = "README.md"
 requires-python = ">=3.9"
-dependencies = []
+dependencies = [
+    "tkinterdnd2>=0.4",  # glisser-déposer dans l'interface graphique
+]
 
 [project.scripts]
 normalize-video = "normalize_video.cli:main"

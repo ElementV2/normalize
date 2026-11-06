@@ -280,6 +280,27 @@ def default_output_path(source: Path, output_dir: Optional[Path] = None,
     return output_dir / source.name
 
 
+def plan_outputs(files: list[Path], output_dir: Optional[Path] = None,
+                 suffix: str = "_normalise") -> list[Path]:
+    """Calcule les chemins de sortie d'un lot, sans collision.
+
+    Avec un dossier de sortie, deux vidéos de même nom venant de dossiers
+    différents s'écraseraient : la seconde devient « nom (2).mp4 », etc.
+    """
+    used: set[str] = set()
+    outputs = []
+    for f in files:
+        out = default_output_path(f, output_dir, suffix)
+        n = 2
+        while str(out.resolve()).lower() in used:
+            base = default_output_path(f, output_dir, suffix)
+            out = base.with_name(f"{base.stem} ({n}){base.suffix}")
+            n += 1
+        used.add(str(out.resolve()).lower())
+        outputs.append(out)
+    return outputs
+
+
 def normalize(source: Path, output: Path, settings: Settings | None = None,
               progress: Optional[ProgressCallback] = None,
               log: Optional[Callable[[str], None]] = None) -> Result:

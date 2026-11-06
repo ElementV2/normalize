@@ -11,7 +11,7 @@ from pathlib import Path
 from . import __version__
 from .core import (
     DEFAULT_TARGET_LRA, DEFAULT_TARGET_TP, PRESETS, NormalizeError, Settings,
-    check_ffmpeg, default_output_path, find_videos, measure, normalize, probe,
+    check_ffmpeg, find_videos, measure, normalize, plan_outputs, probe,
 )
 
 
@@ -57,7 +57,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     p.add_argument("-a", "--analyse", action="store_true",
                    help="Mesure seulement le niveau de chaque vidéo, sans rien modifier.")
-    p.add_argument("--gui", action="store_true", help="Ouvre l'interface graphique.")
+    p.add_argument("--gui", action="store_true",
+                   help="Ouvre l'interface graphique (avec les fichiers indiqués "
+                        "déjà dans la liste).")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return p
 
@@ -99,9 +101,10 @@ def run_normalize(files: list[Path], settings: Settings,
     print(f"Cible : {settings.target_i} LUFS, pic {settings.target_tp} dBTP, "
           f"LRA {settings.target_lra} LU — {total} vidéo(s)\n")
 
+    outputs = plan_outputs(files, output_dir)
+
     def task(idx: int, f: Path):
-        out = default_output_path(f, output_dir)
-        res = normalize(f, out, settings)
+        res = normalize(f, outputs[idx - 1], settings)
         with lock:
             print(f"[{idx}/{total}] {f.name}")
             for m in res.messages:
@@ -137,7 +140,7 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 parser.print_help()
             return 2
-        return gui_main()
+        return gui_main(args.entrees)
 
     try:
         check_ffmpeg()

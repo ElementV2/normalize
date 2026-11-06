@@ -7,8 +7,9 @@ monter le son, puis la suivante qui vous explose les oreilles.
 - Mesure en **LUFS** (norme EBU R128), comme YouTube, Spotify ou la TV
 - Normalisation en **2 passes** (`loudnorm` de ffmpeg) : correction linéaire, sans effet de « pompage »
 - **La vidéo n'est pas ré-encodée** (copie directe) : rapide et sans perte de qualité
-- Interface **graphique** et **ligne de commande**, traitement par lots, en parallèle
-- Aucune dépendance Python : seulement Python ≥ 3.9 et **ffmpeg**
+- Interface **graphique** avec **glisser-déposer** de plusieurs vidéos ou dossiers
+- **Ligne de commande** : traitement par lots, en parallèle
+- Nécessite Python ≥ 3.9 et **ffmpeg** ; `tkinterdnd2` (optionnel) pour le glisser-déposer
 
 ## Installation
 
@@ -16,9 +17,9 @@ monter le son, puis la suivante qui vous explose les oreilles.
    - Windows : `winget install ffmpeg`
    - macOS : `brew install ffmpeg`
    - Linux : `sudo apt install ffmpeg`
-2. Récupérer le projet, puis (optionnel) l'installer :
+2. Récupérer le projet, puis installer le glisser-déposer :
    ```bash
-   pip install .
+   pip install -r requirements.txt   # ou : pip install .  (installe aussi la commande)
    ```
 
 ## Interface graphique
@@ -27,10 +28,19 @@ monter le son, puis la suivante qui vous explose les oreilles.
 python -m normalize_video          # ou : normalize-video-gui
 ```
 
-Ajoutez des vidéos ou un dossier, choisissez le niveau cible, cliquez sur
-**Normaliser**. Le tableau affiche le niveau avant / après de chaque vidéo.
+**Glissez-déposez** vos vidéos (plusieurs à la fois) ou des dossiers entiers
+dans la fenêtre, ou utilisez les boutons « Ajouter… ». Choisissez le niveau
+cible et cliquez sur **Normaliser**. Le tableau affiche le niveau avant /
+après de chaque vidéo.
 
-> Sous Linux, Tkinter peut nécessiter : `sudo apt install python3-tk`.
+- Un dossier déposé est parcouru avec ses sous-dossiers.
+- Les fichiers qui ne sont pas des vidéos sont ignorés, les doublons aussi.
+- Vous pouvez aussi ouvrir l'interface avec des vidéos déjà chargées :
+  `python -m normalize_video --gui a.mp4 b.mp4`
+
+> Sans `tkinterdnd2`, l'application fonctionne normalement, seul le
+> glisser-déposer est désactivé. Sous Linux, Tkinter peut nécessiter
+> `sudo apt install python3-tk`.
 
 ## Ligne de commande
 
@@ -78,9 +88,12 @@ toutes les vidéos**.
   les sous-titres, métadonnées et chapitres sont copiés.
 - Les vidéos sans piste audio (ou totalement silencieuses) sont ignorées.
 - Les originaux ne sont jamais modifiés.
+- Avec un dossier de sortie, deux vidéos de même nom venant de dossiers
+  différents ne s'écrasent pas : la seconde devient `nom (2).mp4`.
 
 ## Tests
 
 ```bash
 python -m unittest -v
+xvfb-run python -m unittest -v   # Linux sans écran, pour inclure les tests de l'interface
 ```

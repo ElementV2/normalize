@@ -10,9 +10,17 @@ from tkinter import filedialog, messagebox, ttk
 
 from .core import (
     DEFAULT_TARGET_LRA, DEFAULT_TARGET_TP, PRESETS, VIDEO_EXTENSIONS,
-    NormalizeError, Settings, check_ffmpeg, default_output_path, find_videos,
+    NormalizeError, Settings, check_ffmpeg, find_videos, plan_outputs,
     normalize,
 )
+
+try:  # Glisser-déposer (optionnel) : pip install tkinterdnd2
+    from tkinterdnd2 import DND_FILES, TkinterDnD
+    _DND_MIXINS: tuple = (TkinterDnD.DnDWrapper,)
+except ImportError:  # pragma: no cover - dépend de l'installation
+    TkinterDnD = None
+    DND_FILES = None
+    _DND_MIXINS = ()
 
 PRESET_LABELS = {
     "YouTube / réseaux sociaux (-14 LUFS)": PRESETS["youtube"],
@@ -22,9 +30,22 @@ PRESET_LABELS = {
 }
 
 
-class App(tk.Tk):
-    def __init__(self) -> None:
+def _enable_dnd(root: tk.Tk) -> bool:
+    """Active tkdnd sur la fenêtre. Retourne False si indisponible."""
+    if TkinterDnD is None:
+        return False
+    require = getattr(TkinterDnD, "require", None) or TkinterDnD._require
+    try:
+        require(root)
+        return True
+    except (RuntimeError, tk.TclError):
+        return False
+
+
+class App(tk.Tk, *_DND_MIXINS):
+    def __init__(self, initial_paths: list[str] | None = None) -> None:
         super().__init__()
+        self.dnd = _enable_dnd(self)
         self.title("Normaliseur de volume vidéo")
         self.geometry("820x600")
         self.minsize(640, 480)
@@ -35,33 +56,63 @@ class App(tk.Tk):
         self.stop_requested = threading.Event()
 
         self._build()
+        if initial_paths:
+            self._add(initial_paths)
         self.after(100, self._poll)
 
     # ------------------------------------------------------------------ UI
     def _build(self) -> None:
         pad = {"padx": 8, "pady": 4}
+        style = ttk.Style(self)
+        style.configure("Drop.Treeview", background="#dbeafe", fieldbackground="#dbeafe")
 
         # Liste des fichiers
-        frm_files = ttk.LabelFrame(self, text="Vidéos à normaliser")
+        title = ("Vidéos à normaliser — glissez-déposez vos fichiers ou dossiers ici"
+                 if self.dnd else "Vidéos à normaliser")
+        frm_files = ttk.LabelFrame(self, text=title)
         frm_files.pack(fill="both", expand=True, **pad)
+        self.frm_files = frm_files
 
-        cols = ("fichier", "avant", "apres", "statut")
-        self.tree = ttk.Treeview(frm_files, columns=cols, show="headings", height=10)
-        for c, label, w in (("fichier", "Fichier", 340), ("avant", "Avant", 110),
-                            ("apres", "Après", 110), ("statut", "Statut", 160)):
-            self.tree.heading(c, text=label)
-            self.tree.column(c, width=w, anchor="w" if c == "fichier" else "center")
-        sb = ttk.Scrollbar(frm_files, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscrollcommand=sb.set)
-        self.tree.pack(side="left", fill="both", expand=True, padx=(4, 0), pady=4)
-        sb.pack(side="left", fill="y", pady=4)
-
+        # Les boutons sont placés en premier pour ne jamais être rognés
         btns = ttk.Frame(frm_files)
-        btns.pack(side="left", fill="y", padx=4, pady=4)
+        btns.pack(side="right", fill="y", padx=4, pady=4)
         ttk.Button(btns, text="Ajouter des vidéos…", command=self.add_files).pack(fill="x", pady=2)
         ttk.Button(btns, text="Ajouter un dossier…", command=self.add_folder).pack(fill="x", pady=2)
         ttk.Button(btns, text="Retirer la sélection", command=self.remove_selected).pack(fill="x", pady=2)
         ttk.Button(btns, text="Tout vider", command=self.clear).pack(fill="x", pady=2)
+
+        cols = ("fichier", "dossier", "avant", "apres", "statut")
+        self.tree = ttk.Treeview(frm_files, columns=cols, show="headings", height=10)
+        for c, label, w, stretch in (("fichier", "Fichier", 220, True),
+                                     ("dossier", "Dossier", 140, True),
+                                     ("avant", "Avant", 90, False),
+                                     ("apres", "Après", 90, False),
+                                     ("statut", "Statut", 80, False)):
+            self.tree.heading(c, text=label)
+            self.tree.column(c, width=w, stretch=stretch,
+                             anchor="w" if c in ("fichier", "dossier") else "center")
+        sb = ttk.Scrollbar(frm_files, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y", pady=4)
+        self.tree.pack(side="left", fill="both", expand=True, padx=(4, 0), pady=4)
+
+        # Message affiché quand la liste est vide
+        hint = ("⬇  Glissez-déposez vos vidéos ici  ⬇\n\n(ou utilisez « Ajouter des vidéos… »)"
+                if self.dnd else
+                "Utilisez « Ajouter des vidéos… » ou « Ajouter un dossier… »\n\n"
+                "(pour le glisser-déposer : pip install tkinterdnd2)")
+        self.hint = tk.Label(self.tree, text=hint, justify="center",
+                             fg="gray45", bg="white", font=("TkDefaultFont", 12))
+        self._update_hint()
+
+        if self.dnd:
+            # On accepte le dépôt sur toute la fenêtre
+            for w in (self, frm_files, self.tree, self.hint):
+                w.drop_target_register(DND_FILES)
+                w.dnd_bind("<<DropEnter>>", self._on_drop_enter)
+                w.dnd_bind("<<DropLeave>>", self._on_drop_leave)
+                w.dnd_bind("<<Drop>>", self._on_drop)
+
 
         # Réglages
         frm_set = ttk.LabelFrame(self, text="Réglages")
@@ -133,20 +184,65 @@ class App(tk.Tk):
             self.lufs.set(value)
             self.spin_lufs.configure(state="disabled")
 
-    def _add(self, paths) -> None:
+    # ------------------------------------------------------ glisser-déposer
+    def _on_drop_enter(self, event):
+        self.hint.configure(bg="#dbeafe")
+        self.tree.configure(style="Drop.Treeview")
+        return event.action
+
+    def _on_drop_leave(self, event):
+        self.hint.configure(bg="white")
+        self.tree.configure(style="Treeview")
+        return event.action
+
+    def _on_drop(self, event):
+        self._on_drop_leave(event)
+        # event.data est une liste Tcl : les chemins avec espaces sont entre {}
+        self._add(self.tk.splitlist(event.data), only_videos=True)
+        return event.action
+
+    def _insert_row(self, i: int, f: Path) -> None:
+        self.tree.insert("", "end", iid=str(i),
+                         values=(f.name, str(f.parent), "", "", "En attente"))
+
+    def _update_hint(self) -> None:
+        if self.files:
+            self.hint.place_forget()
+        else:
+            self.hint.place(relx=0.5, rely=0.55, anchor="center")
+
+    def _add(self, paths, only_videos: bool = False) -> None:
+        """Ajoute des fichiers/dossiers. ``only_videos`` ignore les fichiers
+        qui ne sont pas des vidéos (utile pour un dépôt en vrac)."""
+        paths = [p for p in paths if p]
+        rejected = 0
+        if only_videos:
+            kept = []
+            for p in paths:
+                pp = Path(p)
+                if pp.is_dir() or pp.suffix.lower() in VIDEO_EXTENSIONS:
+                    kept.append(p)
+                else:
+                    rejected += 1
+            paths = kept
         try:
-            new = find_videos(list(paths))
+            new = find_videos(paths, recursive=True) if paths else []
         except NormalizeError as exc:
             messagebox.showerror("Erreur", str(exc))
             return
         known = {f.resolve() for f in self.files}
+        added = 0
         for f in new:
             if f.resolve() not in known:
                 self.files.append(f)
                 known.add(f.resolve())
-                self.tree.insert("", "end", iid=str(len(self.files) - 1),
-                                 values=(str(f), "", "", "En attente"))
-        self.status.set(f"{len(self.files)} vidéo(s) dans la liste.")
+                added += 1
+                self._insert_row(len(self.files) - 1, f)
+        self._update_hint()
+        msg = f"{added} vidéo(s) ajoutée(s) — {len(self.files)} dans la liste."
+        if rejected:
+            msg += f" {rejected} fichier(s) ignoré(s) (pas une vidéo)."
+        self.status.set(msg)
 
     def add_files(self) -> None:
         exts = " ".join(f"*{e}" for e in sorted(VIDEO_EXTENSIONS))
@@ -177,7 +273,8 @@ class App(tk.Tk):
     def _refresh_tree(self) -> None:
         self.tree.delete(*self.tree.get_children())
         for i, f in enumerate(self.files):
-            self.tree.insert("", "end", iid=str(i), values=(str(f), "", "", "En attente"))
+            self._insert_row(i, f)
+        self._update_hint()
         self.status.set(f"{len(self.files)} vidéo(s) dans la liste.")
 
     def choose_outdir(self) -> None:
@@ -228,6 +325,7 @@ class App(tk.Tk):
     # ------------------------------------------------------------ worker
     def _work(self, files: list[Path], settings: Settings, outdir: Path | None) -> None:
         total = len(files)
+        outputs = plan_outputs(files, outdir)
         counts = {"ok": 0, "skip": 0, "err": 0}
         for i, f in enumerate(files):
             if self.stop_requested.is_set():
@@ -238,7 +336,7 @@ class App(tk.Tk):
             def prog(x: float, i=i) -> None:
                 self.events.put(("progress", x, (i + x) / total))
 
-            res = normalize(f, default_output_path(f, outdir), settings, progress=prog)
+            res = normalize(f, outputs[i], settings, progress=prog)
             before = f"{res.before.integrated:.1f} LUFS" if res.before else ""
             after = f"{res.after.integrated:.1f} LUFS" if res.after else ""
             if res.error:
@@ -288,11 +386,12 @@ class App(tk.Tk):
         self.after(100, self._poll)
 
 
-def main() -> int:
-    app = App()
+def main(initial_paths: list[str] | None = None) -> int:
+    app = App(initial_paths)
     app.mainloop()
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    import sys
+    raise SystemExit(main(sys.argv[1:]))
