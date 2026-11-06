@@ -24,8 +24,10 @@ de l'exe.
 > Exécuter quand même**.
 
 L'exe est compilé et testé automatiquement par GitHub Actions
-(`.github/workflows/build-exe.yml`) à chaque modification ; une Release est
-publiée à chaque tag `v*`. Pour le compiler soi-même sous Windows :
+(`.github/workflows/build-exe.yml`) à chaque modification. Une Release est
+publiée à chaque tag `v*`, à chaque push sur la branche principale, ou quand
+le message du commit contient `[release]` (pensez à augmenter `version` dans
+`pyproject.toml` pour une nouvelle version). Pour le compiler soi-même sous Windows :
 
 ```bash
 pip install pyinstaller tkinterdnd2
