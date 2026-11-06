@@ -11,7 +11,28 @@ monter le son, puis la suivante qui vous explose les oreilles.
 - **Ligne de commande** : traitement par lots, en parallèle
 - Nécessite Python ≥ 3.9 et **ffmpeg** ; `tkinterdnd2` (optionnel) pour le glisser-déposer
 
-## Installation
+## Télécharger pour Windows (le plus simple)
+
+**[⬇ Télécharger NormaliseurVideo.exe](https://github.com/elementv2/normalize/releases/latest/download/NormaliseurVideo.exe)**
+
+Un seul fichier, rien à installer (ffmpeg est inclus). Double-cliquez dessus,
+puis glissez-déposez vos vidéos dans la fenêtre — ou directement sur l'icône
+de l'exe.
+
+> Windows SmartScreen peut afficher « Windows a protégé votre ordinateur »
+> car l'exe n'est pas signé : cliquez sur **Informations complémentaires →
+> Exécuter quand même**.
+
+L'exe est compilé et testé automatiquement par GitHub Actions
+(`.github/workflows/build-exe.yml`) à chaque modification ; une Release est
+publiée à chaque tag `v*`. Pour le compiler soi-même sous Windows :
+
+```bash
+pip install pyinstaller tkinterdnd2
+python packaging/build_exe.py --ffmpeg-dir C:\chemin\vers\ffmpeg\bin
+```
+
+## Installation (version Python)
 
 1. Installer **ffmpeg** et vérifier qu'il est dans le PATH (`ffmpeg -version`) :
    - Windows : `winget install ffmpeg`

@@ -19,8 +19,10 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import threading
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -100,9 +102,35 @@ class Result:
 # Outils
 # ---------------------------------------------------------------------------
 
+@lru_cache(maxsize=None)
+def tool_path(name: str) -> str:
+    """Chemin de ``ffmpeg`` ou ``ffprobe``.
+
+    Ordre de recherche :
+    1. variable d'environnement ``NORMALIZE_FFMPEG`` / ``NORMALIZE_FFPROBE`` ;
+    2. copie intégrée à l'exécutable (PyInstaller : dossier ``ffmpeg/``) ;
+    3. à côté de l'exécutable ou dans un sous-dossier ``ffmpeg/`` ;
+    4. le PATH.
+    """
+    env = os.environ.get(f"NORMALIZE_{name.upper()}")
+    if env:
+        return env
+    exe = name + (".exe" if os.name == "nt" else "")
+    bases = []
+    if getattr(sys, "frozen", False):
+        if hasattr(sys, "_MEIPASS"):
+            bases.append(Path(sys._MEIPASS))  # type: ignore[attr-defined]
+        bases.append(Path(sys.executable).resolve().parent)
+    for base in bases:
+        for cand in (base / "ffmpeg" / exe, base / exe):
+            if cand.is_file():
+                return str(cand)
+    return shutil.which(name) or name
+
+
 def check_ffmpeg() -> None:
-    """Vérifie que ffmpeg et ffprobe sont disponibles dans le PATH."""
-    missing = [b for b in ("ffmpeg", "ffprobe") if shutil.which(b) is None]
+    """Vérifie que ffmpeg et ffprobe sont disponibles."""
+    missing = [b for b in ("ffmpeg", "ffprobe") if shutil.which(tool_path(b)) is None]
     if missing:
         raise NormalizeError(
             "Introuvable : " + ", ".join(missing) + ".\n"
@@ -151,7 +179,7 @@ def find_videos(paths: list[str | Path], recursive: bool = False) -> list[Path]:
 def probe(path: Path) -> MediaInfo:
     """Lit la durée et les caractéristiques de la première piste audio."""
     proc = _run([
-        "ffprobe", "-v", "error", "-print_format", "json",
+        tool_path("ffprobe"), "-v", "error", "-print_format", "json",
         "-show_format", "-show_streams", str(path),
     ])
     if proc.returncode != 0:
@@ -247,7 +275,7 @@ def measure(path: Path, settings: Settings | None = None,
     info = info or probe(path)
     if not info.has_audio:
         raise NormalizeError("Aucune piste audio dans ce fichier.")
-    cmd = ["ffmpeg", "-hide_banner", "-i", str(path),
+    cmd = [tool_path("ffmpeg"), "-hide_banner", "-i", str(path),
            "-map", "0:a:0", "-af", _loudnorm_filter(settings),
            "-vn", "-sn", "-dn", "-f", "null", "-"]
     code, err = _run_with_progress(cmd, info.duration, progress)
@@ -346,7 +374,7 @@ def normalize(source: Path, output: Path, settings: Settings | None = None,
         output.parent.mkdir(parents=True, exist_ok=True)
         sample_rate = str(info.sample_rate or 48000)
         cmd = [
-            "ffmpeg", "-hide_banner", "-y", "-i", str(source),
+            tool_path("ffmpeg"), "-hide_banner", "-y", "-i", str(source),
             # On garde la vidéo, la 1re piste audio (normalisée), les sous-titres
             # et les métadonnées / chapitres.
             "-map", "0:v?", "-map", "0:a:0", "-map", "0:s?",

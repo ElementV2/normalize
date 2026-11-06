@@ -20,3 +20,6 @@ normalize-video-gui = "normalize_video.gui:main"
 
 [tool.setuptools]
 packages = ["normalize_video"]
+
+[tool.setuptools.package-data]
+normalize_video = ["assets/*.png"]

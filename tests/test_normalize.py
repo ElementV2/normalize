@@ -9,17 +9,19 @@ import unittest
 from pathlib import Path
 
 from normalize_video.cli import main
-from normalize_video.core import Settings, find_videos, measure, normalize, plan_outputs
+from normalize_video.core import (
+    Settings, find_videos, measure, normalize, plan_outputs, tool_path,
+)
 
-HAS_FFMPEG = shutil.which("ffmpeg") and shutil.which("ffprobe")
+HAS_FFMPEG = shutil.which(tool_path("ffmpeg")) and shutil.which(tool_path("ffprobe"))
 
 
 def make_video(path: Path, audio: str | None, seconds: int = 4) -> Path:
-    cmd = ["ffmpeg", "-v", "error", "-y", "-f", "lavfi",
+    cmd = [tool_path("ffmpeg"), "-v", "error", "-y", "-f", "lavfi",
            "-i", "testsrc=size=160x120:rate=15"]
     if audio:
         cmd += ["-f", "lavfi", "-i", audio, "-c:a", "aac", "-shortest"]
-    cmd += ["-t", str(seconds), "-c:v", "libx264", str(path)]
+    cmd += ["-t", str(seconds), "-c:v", "mpeg4", str(path)]
     subprocess.run(cmd, check=True)
     return path
 

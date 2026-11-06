@@ -46,6 +46,13 @@ class App(tk.Tk, *_DND_MIXINS):
     def __init__(self, initial_paths: list[str] | None = None) -> None:
         super().__init__()
         self.dnd = _enable_dnd(self)
+        icon = Path(__file__).with_name("assets") / "icon.png"
+        if icon.is_file():
+            try:
+                self._icon = tk.PhotoImage(file=str(icon))
+                self.iconphoto(True, self._icon)
+            except tk.TclError:
+                pass
         self.title("Normaliseur de volume vidéo")
         self.geometry("820x600")
         self.minsize(640, 480)
